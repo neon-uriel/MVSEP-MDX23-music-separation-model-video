@@ -8,7 +8,7 @@ if __name__ == '__main__':
     print('GPU use: {}'.format(gpu_use))
     os.environ["CUDA_VISIBLE_DEVICES"] = "{}".format(gpu_use)
 
-
+import subprocess
 import numpy as np
 import torch
 import torch.nn as nn
@@ -128,17 +128,16 @@ def demix_base(mix, device, models, infer_session):
             waves = np.array(mix_p[:, i:i + model.chunk_size])
             mix_waves.append(waves)
             i += gen_size
-        mix_waves = np.array(mix_waves)  # Convert the list to a single numpy.ndarray
         mix_waves = torch.tensor(mix_waves, dtype=torch.float32).to(device)
 
-    with torch.no_grad():
-        _ort = infer_session
-        stft_res = model.stft(mix_waves)
-        res = _ort.run(None, {'input': stft_res.cpu().numpy()})[0]
-        ten = torch.tensor(res).to(device)  # Move result tensor to device
-        tar_waves = model.istft(ten)  # This operation is performed on the GPU
-        tar_waves = tar_waves.cpu()  # Move the result back to CPU only after all computations
-        tar_signal = tar_waves[:, :, trim:-trim].transpose(0, 1).reshape(2, -1).numpy()[:, :-pad]
+        with torch.no_grad():
+            _ort = infer_session
+            stft_res = model.stft(mix_waves)
+            res = _ort.run(None, {'input': stft_res.cpu().numpy()})[0]
+            ten = torch.tensor(res)
+            tar_waves = model.istft(ten.to(device))
+            tar_waves = tar_waves.cpu()
+            tar_signal = tar_waves[:, :, trim:-trim].transpose(0, 1).reshape(2, -1).numpy()[:, :-pad]
 
         sources.append(tar_signal)
     # print('Time demix base: {:.2f} sec'.format(time() - start_time))
@@ -171,6 +170,9 @@ def demix_full(mix, device, chunk_size, models, infer_session, overlap=0.75):
 
 
 class EnsembleDemucsMDXMusicSeparationModel:
+    """
+    Doesn't do any separation just passes the input back as output
+    """
     def __init__(self, options):
         """
             options - user options
@@ -473,6 +475,10 @@ class EnsembleDemucsMDXMusicSeparationModel:
 
 
 class EnsembleDemucsMDXMusicSeparationModelLowGPU:
+    """
+    Doesn't do any separation just passes the input back as output
+    """
+
     def __init__(self, options):
         """
             options - user options
@@ -816,6 +822,12 @@ def predict_with_model(options):
             print('Generate only vocals and instrumental')
             only_vocals = True
 
+    save_as_videos = True
+    if 'save_as_videos' in options:
+        if options['save_as_videos'] is True:
+            print('Saving as videos if it is possible')
+            only_vocals = True    
+
     model = None
     if 'large_gpu' in options:
         if options['large_gpu'] is True:
@@ -863,7 +875,20 @@ def predict_with_model(options):
             output_name = os.path.splitext(os.path.basename(input_audio))[0] + '_{}.wav'.format('instrum2')
             sf.write(output_folder + '/' + output_name, inst2, sr, subtype='FLOAT')
             print('File created: {}'.format(output_folder + '/' + output_name))
-
+        if is_video_file(input_audio):
+            output_name = output_folder + '/' + os.path.splitext(os.path.basename(input_audio))[0] + '_{}.mp4'.format('vocals')
+            vocalwav_name = output_folder + '/' + os.path.splitext(os.path.basename(input_audio))[0] + '_{}.wav'.format('vocals')
+            command = (
+                'ffmpeg -y -i "{}" -i "{}" -c:v copy -c:a aac -map 0:v:0 -map 1:a:0 "{}"'
+                .format(input_audio, vocalwav_name, output_name)
+            )
+            try:
+                # FFmpegコマンドの実行
+                subprocess.run(command, check=True)
+                print(f"Successfully merged")
+            except subprocess.CalledProcessError as e:
+                print(f"Error merging files: {e}")
+                
     if update_percent_func is not None:
         val = 100
         update_percent_func(int(val))
@@ -876,6 +901,13 @@ def md5(fname):
             hash_md5.update(chunk)
     return hash_md5.hexdigest()
 
+def is_video_file(file_path):
+    """
+    ファイルが動画ファイルかどうかを拡張子で判別する関数
+    """
+    video_extensions = ['.mp4', '.mov', '.avi', '.mkv', '.flv', '.wmv', '.webm']
+    _, ext = os.path.splitext(file_path)
+    return ext.lower() in video_extensions
 
 if __name__ == '__main__':
     start_time = time()
@@ -892,12 +924,14 @@ if __name__ == '__main__':
     m.add_argument("--large_gpu", action='store_true', help="It will store all models on GPU for faster processing of multiple audio files. Requires 11 and more GB of free GPU memory.")
     m.add_argument("--use_kim_model_1", action='store_true', help="Use first version of Kim model (as it was on contest).")
     m.add_argument("--only_vocals", action='store_true', help="Only create vocals and instrumental. Skip bass, drums, other")
+    m.add_argument("--save_as_videos", action='store_true', help="Save as Videos if it is possible")
 
     options = m.parse_args().__dict__
     print("Options: ".format(options))
     for el in options:
         print('{}: {}'.format(el, options[el]))
     predict_with_model(options)
+
     print('Time: {:.0f} sec'.format(time() - start_time))
     print('Presented by https://mvsep.com')
 

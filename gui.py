@@ -50,7 +50,7 @@ class Ui_Dialog(object):
         global root
 
         Dialog.setObjectName("Settings")
-        Dialog.resize(370, 320)
+        Dialog.resize(370, 350)
 
         self.checkbox_cpu = QCheckBox("Use CPU instead of GPU?", Dialog)
         self.checkbox_cpu.move(30, 10)
@@ -82,52 +82,58 @@ class Ui_Dialog(object):
         if root['only_vocals']:
             self.checkbox_only_vocals.setChecked(True)
 
+        self.checkbox_save_as_videos = QCheckBox("🎦Save as Videos if it is possible?🎦", Dialog)
+        self.checkbox_save_as_videos.move(30, 160)
+        self.checkbox_save_as_videos.resize(320, 40)
+        if root['save_as_videos']:
+            self.checkbox_save_as_videos.setChecked(True)
+
         self.chunk_size_label = QLabel(Dialog)
         self.chunk_size_label.setText('Chunk size')
-        self.chunk_size_label.move(30, 160)
+        self.chunk_size_label.move(30, 190)
         self.chunk_size_label.resize(320, 40)
 
         self.chunk_size_valid = QIntValidator(bottom=100000, top=10000000)
         self.chunk_size = QLineEdit(Dialog)
         self.chunk_size.setFixedWidth(140)
-        self.chunk_size.move(130, 170)
+        self.chunk_size.move(130, 200)
         self.chunk_size.setValidator(self.chunk_size_valid)
         self.chunk_size.setText(str(root['chunk_size']))
 
         self.overlap_large_label = QLabel(Dialog)
         self.overlap_large_label.setText('Overlap large')
-        self.overlap_large_label.move(30, 190)
+        self.overlap_large_label.move(30, 220)
         self.overlap_large_label.resize(320, 40)
 
         self.overlap_large_valid = QDoubleValidator(bottom=0.001, top=0.999, decimals=10)
         self.overlap_large_valid.setNotation(QDoubleValidator.Notation.StandardNotation)
         self.overlap_large = QLineEdit(Dialog)
         self.overlap_large.setFixedWidth(140)
-        self.overlap_large.move(130, 200)
+        self.overlap_large.move(130, 230)
         self.overlap_large.setValidator(self.overlap_large_valid)
         self.overlap_large.setText(str(root['overlap_large']))
 
         self.overlap_small_label = QLabel(Dialog)
         self.overlap_small_label.setText('Overlap small')
-        self.overlap_small_label.move(30, 220)
+        self.overlap_small_label.move(30, 250)
         self.overlap_small_label.resize(320, 40)
 
         self.overlap_small_valid = QDoubleValidator(0.001, 0.999, 10)
         self.overlap_small_valid.setNotation(QDoubleValidator.Notation.StandardNotation)
         self.overlap_small = QLineEdit(Dialog)
         self.overlap_small.setFixedWidth(140)
-        self.overlap_small.move(130, 230)
+        self.overlap_small.move(130, 260)
         self.overlap_small.setValidator(self.overlap_small_valid)
         self.overlap_small.setText(str(root['overlap_small']))
 
         self.pushButton_save = QPushButton(Dialog)
         self.pushButton_save.setObjectName("pushButton_save")
-        self.pushButton_save.move(30, 280)
+        self.pushButton_save.move(30, 300)
         self.pushButton_save.resize(150, 35)
 
         self.pushButton_cancel = QPushButton(Dialog)
         self.pushButton_cancel.setObjectName("pushButton_cancel")
-        self.pushButton_cancel.move(190, 280)
+        self.pushButton_cancel.move(190, 300)
         self.pushButton_cancel.resize(150, 35)
 
         self.retranslateUi(Dialog)
@@ -152,6 +158,7 @@ class Ui_Dialog(object):
         root['large_gpu'] = self.checkbox_large_gpu.isChecked()
         root['use_kim_model_1'] = self.checkbox_kim_1.isChecked()
         root['only_vocals'] = self.checkbox_only_vocals.isChecked()
+        root['save_as_videos'] = self.checkbox_save_as_videos.isChecked()
 
         chunk_size_text = self.chunk_size.text()
         state = self.chunk_size_valid.validate(chunk_size_text, 0)
@@ -234,19 +241,18 @@ class MyWidget(QWidget):
             'overlap_small': root['overlap_small'],
             'use_kim_model_1': root['use_kim_model_1'],
             'only_vocals': root['only_vocals'],
+            'save_as_videos': root['save_as_videos'],
         }
 
         self.update_progress(0)
         self.thread = QThread()
         self.worker = Worker(options)
         self.worker.moveToThread(self.thread)
-
         self.thread.started.connect(self.worker.run)
         self.worker.finished.connect(self.thread.quit)
         self.worker.finished.connect(self.worker.deleteLater)
         self.thread.finished.connect(self.thread.deleteLater)
         self.worker.progress.connect(self.update_progress)
-
         self.thread.start()
 
     def stop_separation(self):
@@ -314,7 +320,8 @@ def create_dialog():
     root['overlap_large'] = 0.6
     root['overlap_small'] = 0.5
     root['use_kim_model_1'] = False
-    root['only_vocals'] = False
+    root['only_vocals'] = True
+    root['save_as_videos'] = True
 
     t = torch.cuda.get_device_properties(0).total_memory / (1024 * 1024 * 1024)
     if t > 11.5:
@@ -386,13 +393,13 @@ def create_dialog():
     button_settings.move(495, 270)
     button_settings.setDisabled(False)
 
-    mvsep_link = QLabel(w)
-    mvsep_link.setOpenExternalLinks(True)
-    font = mvsep_link.font()
-    font.setFamily("Courier")
-    font.setPointSize(10)
-    mvsep_link.move(415, 30)
-    mvsep_link.setText('Powered by <a href="https://mvsep.com">MVSep.com</a>')
+    # mvsep_link = QLabel(w)
+    # mvsep_link.setOpenExternalLinks(True)
+    # font = mvsep_link.font()
+    # font.setFamily("Courier")
+    # font.setPointSize(10)
+    # mvsep_link.move(415, 30)
+    # mvsep_link.setText('Powered by <a href="https://mvsep.com">MVSep.com</a>')
 
     root['w'] = w
     root['input_files_list_text_area'] = input_files_list_text_area
